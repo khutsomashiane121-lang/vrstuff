@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>UJ EV Journey Simulator</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- A-Frame for AR -->
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      #map {
+        height: 100%;
+        width: 100%;
+      }
+
+      #arView {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        background: #000;
+      }
+
+      #arView.active {
+        display: block;
+      }
+
+      #panelContainer {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 2000;
+        max-width: 380px;
+      }
+
+      #panelToggle {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 14px 24px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: all 0.3s;
+      }
+
+      #panel {
+        background-color: rgba(255, 255, 255, 0.97);
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        max-height: 88vh;
+        overflow-y: auto;
+      }
+
+      #panel.hidden {
+        display: none;
+      }
+
+      .section {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        border-left: 4px solid #667eea;
+      }
+
+      .section h3 {
+        margin: 0 0 12px 0;
+        color: #333;
+        font-size: 16px;
+      }
+
+      .vehicle-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 16px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      }
+
+      .vehicle-name {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+
+      .vehicle-specs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        font-size: 13px;
+      }
+
+      .spec-item {
+        background: rgba(255, 255, 255, 0.15);
+        padding: 8px;
+        border-radius: 6px;
+      }
+
+      .spec-label {
+        opacity: 0.9;
+        font-size: 11px;
+      }
+
+      .spec-value {
+        font-weight: bold;
+        font-size: 15px;
+        margin-top: 2px;
+      }
+
+      .battery-status {
+        margin-bottom: 15px;
+      }
+
+      .battery-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .battery-bar-container {
+        background: #e9ecef;
+        height: 40px;
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+      }
+
+      .battery-bar {
+        height: 100%;
+        transition: width 0.5s ease, background 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: white;
+        font-size: 15px;
+      }
+
+      .battery-bar.critical {
+        background: linear-gradient(90deg, #dc3545 0%, #c82333 100%);
+      }
+
+      .battery-bar.low {
+        background: linear-gradient(90deg, #ffc107 0%, #e0a800 100%);
+      }
+
+      .battery-bar.medium {
+        background: linear-gradient(90deg, #17a2b8 0%, #138496 100%);
+      }
+
+      .battery-bar.good {
+        background: linear-gradient(90deg, #28a745 0%, #218838 100%);
+      }
+
+      .range-info {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 8px;
+        font-size: 12px;
+        color: #666;
+      }
+
+      .input-group {
+        margin-bottom: 12px;
+      }
+
+      .input-group label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+        font-size: 13px;
+        color: #495057;
+      }
+
+      .input-group input,
+      .input-group select {
+        width: 100%;
+        padding: 10px;
+        border: 2px solid #dee2e6;
+        border-radius: 6px;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+
+      .btn {
+        width: 100%;
+        padding: 12px;
+        border: none;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-top: 8px;
+      }
+
+      .btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      }
+
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      .btn-success {
+        background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+        color: white;
+      }
+
+      .btn-warning {
+        background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+        color: #000;
+      }
+
+      .btn-danger {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+      }
+
+      .btn-info {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+      }
+
+      .journey-status {
+        background: white;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+      }
+
+      .status-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 13px;
+      }
+
+      .status-item:last-child {
+        border-bottom: none;
+      }
+
+      .status-label {
+        color: #666;
+      }
+
+      .status-value {
+        font-weight: bold;
+        color: #333;
+      }
+
+      .station-list {
+        max-height: 300px;
+        overflow-y: auto;
+      }
+
+      .station-item {
+        background: white;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .station-item:hover {
+        border-color: #667eea;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+      }
+
+      .station-item.selected {
+        border-color: #28a745;
+        background: #f0fff4;
+      }
+
+      .station-item.unreachable {
+        opacity: 0.6;
+        border-color: #dc3545;
+        background: #fff5f5;
+        cursor: not-allowed;
+      }
+
+      .station-name {
+        font-weight: bold;
+        font-size: 14px;
+        color: #333;
+        margin-bottom: 6px;
+      }
+
+      .station-details {
+        font-size: 12px;
+        color: #666;
+        line-height: 1.6;
+      }
+
+      .station-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-right: 6px;
+        margin-top: 4px;
+      }
+
+      .badge-reachable {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .badge-unreachable {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .badge-fast {
+        background: #cce5ff;
+        color: #004085;
+      }
+
+      .message {
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .message-info {
+        background: #d1ecf1;
+        border-left: 4px solid #17a2b8;
+        color: #0c5460;
+      }
+
+      .message-success {
+        background: #d4edda;
+        border-left: 4px solid #28a745;
+        color: #155724;
+      }
+
+      .message-warning {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+        color: #856404;
+      }
+
+      .message-danger {
+        background: #f8d7da;
+        border-left: 4px solid #dc3545;
+        color: #721c24;
+      }
+
+      .ar-controls {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 2500;
+        display: none;
+      }
+
+      .ar-controls.active {
+        display: block;
+      }
+
+      .ar-controls button {
+        display: block;
+        margin-bottom: 10px;
+        padding: 12px 20px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: 2px solid white;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+      }
+
+      #arOverlay {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 2500;
+        background: rgba(0, 0, 0, 0.85);
+        color: white;
+        padding: 30px;
+        border-radius: 12px;
+        text-align: center;
+        display: none;
+        max-width: 90%;
+      }
+
+      #arOverlay.active {
+        display: block;
+      }
+
+      .ar-info {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2500;
+        background: rgba(0, 0, 0, 0.85);
+        color: white;
+        padding: 15px 25px;
+        border-radius: 25px;
+        font-size: 14px;
+        display: none;
+      }
+
+      .ar-info.active {
+        display: block;
+      }
+
+      .campus-selector {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 15px;
+      }
+
+      .campus-btn {
+        padding: 12px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .campus-btn:hover {
+        border-color: #667eea;
+        background: #f8f9ff;
+      }
+
+      .campus-btn.active {
+        border-color: #28a745;
+        background: #d4edda;
+        color: #155724;
+      }
+
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #667eea;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    
+    <div id="panelContainer">
+      <button id="panelToggle" onclick="togglePanel()">
+        <span id="toggleIcon">▼</span> UJ EV Simulator
+      </button>
+      
+      <div id="panel">
+        <h2 style="margin: 0 0 15px 0; color: #333; font-size: 20px;">🎓 UJ EV Journey</h2>
+        
+        <!-- UJ Campus Selector -->
+        <div class="section">
+          <h3>📍 Select Your UJ Campus</h3>
+          <div class="campus-selector">
+            <button class="campus-btn active" onclick="selectCampus('apk')">
+              APK<br><small>Auckland Park Kingsway</small>
+            </button>
+            <button class="campus-btn" onclick="selectCampus('apb')">
+              APB<br><small>Auckland Park Bunting</small>
+            </button>
+            <button class="campus-btn" onclick="selectCampus('dfc')">
+              DFC<br><small>Doornfontein</small>
+            </button>
+            <button class="campus-btn" onclick="selectCampus('swc')">
+              SWC<br><small>Soweto</small>
+            </button>
+          </div>
+          <button class="btn btn-info" onclick="useCurrentLocation()" style="margin-top: 5px;">
+            📍 Use My Current GPS Location
+          </button>
+        </div>
+
+        <!-- Vehicle Info -->
+        <div class="vehicle-card">
+          <div class="vehicle-name">
+            <span>🚙 Standard EV</span>
+          </div>
+          <div class="vehicle-specs">
+            <div class="spec-item">
+              <div class="spec-label">Battery</div>
+              <div class="spec-value">60 kWh</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Max Range</div>
+              <div class="spec-value">350 km</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Current Campus</div>
+              <div class="spec-value" id="currentCampus">APK</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Efficiency</div>
+              <div class="spec-value">17.1 kWh/100km</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Battery Status -->
+        <div class="battery-status">
+          <div class="battery-header">
+            <span>🔋 Battery</span>
+            <span id="batteryPercent">75%</span>
+          </div>
+          <div class="battery-bar-container">
+            <div class="battery-bar good" id="batteryBar" style="width: 75%;">
+              <span id="batteryText">262 km</span>
+            </div>
+          </div>
+          <div class="range-info">
+            <span>⚡ <span id="energyAvailable">45.0</span> kWh</span>
+            <span>📍 Safe: <span id="safeRange">210</span> km</span>
+          </div>
+        </div>
+
+        <!-- Journey Planner -->
+        <div class="section">
+          <h3>🗺️ Plan Journey</h3>
+          
+          <div class="input-group">
+            <label for="destination">Destination:</label>
+            <select id="destination" onchange="selectDestination()">
+              <option value="">-- Select Destination --</option>
+              <option value="sandton">Sandton City (15 km)</option>
+              <option value="rosebank">Rosebank (8 km)</option>
+              <option value="pretoria">Pretoria CBD (56 km)</option>
+              <option value="soweto">Soweto (20 km)</option>
+              <option value="midrand">Midrand (28 km)</option>
+              <option value="fourways">Fourways (18 km)</option>
+            </select>
+          </div>
+
+          <div id="journeyInfo" style="display: none;">
+            <div class="journey-status">
+              <div class="status-item">
+                <span class="status-label">📏 Distance</span>
+                <span class="status-value" id="journeyDistance">--</span>
+              </div>
+              <div class="status-item">
+                <span class="status-label">⚡ Energy</span>
+                <span class="status-value" id="journeyEnergy">--</span>
+              </div>
+              <div class="status-item">
+                <span class="status-label">🔋 Battery After</span>
+                <span class="status-value" id="journeyBatteryAfter">--</span>
+              </div>
+              <div class="status-item">
+                <span class="status-label">⏱️ Time</span>
+                <span class="status-value" id="journeyTime">--</span>
+              </div>
+            </div>
+
+            <div id="journeyMessage"></div>
+
+            <button class="btn btn-primary" onclick="startJourney()" id="startJourneyBtn">
+              🚗 Start Journey
+            </button>
+          </div>
+        </div>
+
+        <!-- Charging Stations -->
+        <div class="section" id="chargingSection" style="display: none;">
+          <h3>⚡ Charging Stations</h3>
+          <div id="stationsList" class="station-list"></div>
+          <button class="btn btn-success" onclick="navigateToStation()" id="navigateBtn" disabled>
+            🗺️ Navigate to Station
+          </button>
+        </div>
+
+        <!-- Actions -->
+        <div class="section">
+          <h3>🎯 Actions</h3>
+          <button class="btn btn-info" onclick="findChargers()">
+            🔍 Find Charging Stations
+          </button>
+          <button class="btn btn-success" onclick="chargeVehicle()" id="chargeBtn" disabled>
+            ⚡ Charge Vehicle
+          </button>
+          <button class="btn btn-warning" onclick="toggleARView()" id="arBtn">
+            📱 AR View
+          </button>
+          <button class="btn btn-danger" onclick="resetSimulation()">
+            🔄 Reset
+          </button>
+        </div>
+
+        <div id="messages"></div>
+      </div>
+    </div>
+
+    <div id="map"></div>
+
+    <!-- AR View -->
+    <div id="arView">
+      <a-scene
+        embedded
+        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+        vr-mode-ui="enabled: false"
+        renderer="logarithmicDepthBuffer: true;">
+        <a-camera gps-camera="minDistance: 5; maxDistance: 2000;" rotation-reader look-controls-enabled="true"></a-camera>
+        <a-entity id="arStations"></a-entity>
+      </a-scene>
+    </div>
+
+    <div class="ar-controls" id="arControls">
+      <button onclick="recenterAR()">🎯 Recenter</button>
+      <button onclick="toggleARView()">✖️ Close AR</button>
+    </div>
+
+    <div id="arOverlay">
+      <h3>📱 AR Mode</h3>
+      <p>Point camera at horizon to see charging stations</p>
+      <p style="font-size: 12px; margin-top: 15px;">Green = Reachable | Red = Out of range</p>
+      <p id="arDebug" style="font-size: 11px; margin-top: 10px; opacity: 0.7;"></p>
+    </div>
+
+    <div class="ar-info" id="arInfo">
+      <span id="arInfoText">Scanning...</span>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+    <script>
+      // === UJ CAMPUSES ===
+      const ujCampuses = {
+        apk: { 
+          name: 'APK (Auckland Park Kingsway)', 
+          shortName: 'APK',
+          lat: -26.1845, 
+          lng: 28.0028 
+        },
+        apb: { 
+          name: 'APB (Auckland Park Bunting)', 
+          shortName: 'APB',
+          lat: -26.1896, 
+          lng: 27.9987 
+        },
+        dfc: { 
+          name: 'DFC (Doornfontein)', 
+          shortName: 'DFC',
+          lat: -26.1943, 
+          lng: 28.0500 
+        },
+        swc: { 
+          name: 'SWC (Soweto)', 
+          shortName: 'SWC',
+          lat: -26.2678, 
+          lng: 27.8581 
+        }
+      };
+
+      // === VEHICLE STATE ===
+      const vehicle = {
+        battery: 60,
+        maxRange: 350,
+        efficiency: 17.14,
+        soc: 75,
+        lat: -26.1845,
+        lng: 28.0028,
+        campus: 'apk'
+      };
+
+      // === DESTINATIONS ===
+      const destinations = {
+        sandton: { name: 'Sandton City', lat: -26.1076, lng: 28.0567, distance: 15 },
+        rosebank: { name: 'Rosebank Mall', lat: -26.1449, lng: 28.0407, distance: 8 },
+        pretoria: { name: 'Pretoria CBD', lat: -25.7479, lng: 28.2293, distance: 56 },
+        soweto: { name: 'Soweto', lat: -26.2678, lng: 27.8581, distance: 20 },
+        midrand: { name: 'Midrand', lat: -25.9895, lng: 28.1287, distance: 28 },
+        fourways: { name: 'Fourways Mall', lat: -26.0119, lng: 28.0078, distance: 18 }
+      };
+
+      // === CHARGING STATIONS (closer to UJ campuses) ===
+      const chargingStations = [
+        { id: 1, name: "Sandton City Hub", lat: -26.1076, lng: 28.0567, power: 150, type: "DC Fast", available: 3, cost: 8.50 },
+        { id: 2, name: "Rosebank Mall", lat: -26.1449, lng: 28.0407, power: 50, type: "DC Fast", available: 2, cost: 7.20 },
+        { id: 3, name: "Melrose Arch", lat: -26.1334, lng: 28.0707, power: 22, type: "AC", available: 4, cost: 4.50 },
+        { id: 4, name: "Fourways Mall", lat: -26.0119, lng: 28.0078, power: 100, type: "DC Fast", available: 1, cost: 8.00 },
+        { id: 5, name: "Hyde Park", lat: -26.1277, lng: 28.0406, power: 50, type: "DC Fast", available: 2, cost: 7.20 },
+        { id: 6, name: "Montecasino", lat: -26.0349, lng: 27.9877, power: 75, type: "DC Fast", available: 3, cost: 7.80 },
+        { id: 7, name: "Bryanston", lat: -26.0549, lng: 28.0206, power: 22, type: "AC", available: 5, cost: 4.50 },
+        { id: 8, name: "Cresta Mall", lat: -26.1307, lng: 27.9885, power: 50, type: "DC Fast", available: 1, cost: 7.20 }
+      ];
+
+      let map, userMarker, destinationMarker;
+      let chargingMarkers = [];
+      let routingControl = null;
+      let selectedStation = null;
+      let selectedDestination = null;
+      let panelVisible = true;
+      let arActive = false;
+      let atStation = false;
+      let nearbyStationsForAR = [];
+
+      // === INITIALIZATION ===
+      function initMap() {
+        map = L.map('map').setView([vehicle.lat, vehicle.lng], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap',
+          maxZoom: 19
+        }).addTo(map);
+
+        updateUserMarker();
+        updateUI();
+        showMessage('📚 UJ EV Simulator loaded. Select your campus and start planning!', 'info');
+      }
+
+      function updateUserMarker() {
+        if (userMarker) map.removeLayer(userMarker);
+
+        const blueIcon = L.icon({
+          iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34],
+          shadowSize: [41, 41]
+        });
+
+        userMarker = L.marker([vehicle.lat, vehicle.lng], {icon: blueIcon})
+          .addTo(map)
+          .bindPopup(`<b>Your EV</b><br>${ujCampuses[vehicle.campus].shortName}<br>${vehicle.soc.toFixed(1)}% battery`)
+          .openPopup();
+      }
+
+      // === CAMPUS SELECTION ===
+      function selectCampus(campusId) {
+        vehicle.campus = campusId;
+        vehicle.lat = ujCampuses[campusId].lat;
+        vehicle.lng = ujCampuses[campusId].lng;
+
+        document.querySelectorAll('.campus-btn').forEach(btn => btn.classList.remove('active'));
+        event.target.closest('.campus-btn').classList.add('active');
+
+        document.getElementById('currentCampus').textContent = ujCampuses[campusId].shortName;
+
+        updateUserMarker();
+        map.setView([vehicle.lat, vehicle.lng], 13);
+
+        clearMessages();
+        showMessage(`📍 Location set to ${ujCampuses[campusId].name}`, 'success');
+      }
+
+      function useCurrentLocation() {
+        if (!navigator.geolocation) {
+          showMessage('⚠️ Geolocation not supported', 'warning');
+          return;
+        }
+
+        showMessage('📍 Getting your location...', 'info');
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+
+            // Find nearest UJ campus
+            let nearestCampus = 'apk';
+            let minDistance = Infinity;
+
+            Object.entries(ujCampuses).forEach(([id, campus]) => {
+              const dist = calculateDistance(lat, lng, campus.lat, campus.lng);
+              if (dist < minDistance) {
+                minDistance = dist;
+                nearestCampus = id;
+              }
+            });
+
+            // If within 5km of a campus, use that campus
+            if (minDistance < 5) {
+              selectCampus(nearestCampus);
+              showMessage(`📍 You're near ${ujCampuses[nearestCampus].name}! (${minDistance.toFixed(1)} km away)`, 'success');
+            } else {
+              // Use actual GPS location
+              vehicle.lat = lat;
+              vehicle.lng = lng;
+              updateUserMarker();
+              map.setView([lat, lng], 13);
+              document.getElementById('currentCampus').textContent = 'Custom';
+              showMessage(`📍 Using your GPS location (${minDistance.toFixed(1)} km from nearest UJ campus)`, 'success');
+            }
+          },
+          (error) => {
+            showMessage('⚠️ Could not get location. Using APK campus.', 'warning');
+          }
+        );
+      }
+
+      // === CALCULATIONS ===
+      function calculateDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLng/2) * Math.sin(dLng/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+      }
+
+      function calculateRemainingRange() {
+        const availableEnergy = (vehicle.soc / 100) * vehicle.battery;
+        return (availableEnergy / vehicle.efficiency) * 100;
+      }
+
+      function calculateSafeRange() {
+        return calculateRemainingRange() * 0.8;
+      }
+
+      function calculateEnergyForDistance(distance) {
+        return (distance / 100) * vehicle.efficiency;
+      }
+
+      // === UI UPDATES ===
+      function updateUI() {
+        const remainingRange = calculateRemainingRange();
+        const safeRange = calculateSafeRange();
+        const availableEnergy = (vehicle.soc / 100) * vehicle.battery;
+
+        document.getElementById('batteryPercent').textContent = vehicle.soc.toFixed(1) + '%';
+        document.getElementById('batteryText').textContent = remainingRange.toFixed(0) + ' km';
+        document.getElementById('energyAvailable').textContent = availableEnergy.toFixed(1);
+        document.getElementById('safeRange').textContent = safeRange.toFixed(0);
+
+        const batteryBar = document.getElementById('batteryBar');
+        batteryBar.style.width = vehicle.soc + '%';
+
+        batteryBar.className = 'battery-bar';
+        if (vehicle.soc < 15) batteryBar.classList.add('critical');
+        else if (vehicle.soc < 30) batteryBar.classList.add('low');
+        else if (vehicle.soc < 60) batteryBar.classList.add('medium');
+        else batteryBar.classList.add('good');
+      }
+
+      function showMessage(text, type = 'info') {
+        const messagesDiv = document.getElementById('messages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message message-${type}`;
+        messageDiv.innerHTML = text;
+        messagesDiv.appendChild(messageDiv);
+        
+        setTimeout(() => messageDiv.remove(), 10000);
+      }
+
+      function clearMessages() {
+        document.getElementById('messages').innerHTML = '';
+      }
+
+      // === JOURNEY PLANNING ===
+      function selectDestination() {
+        const destKey = document.getElementById('destination').value;
+        
+        if (!destKey) {
+          document.getElementById('journeyInfo').style.display = 'none';
+          if (destinationMarker) {
+            map.removeLayer(destinationMarker);
+            destinationMarker = null;
+          }
+          return;
+        }
+
+        selectedDestination = destinations[destKey];
+        
+        // Recalculate actual distance from current position
+        const actualDistance = calculateDistance(
+          vehicle.lat, vehicle.lng,
+          selectedDestination.lat, selectedDestination.lng
+        );
+
+        const energyRequired = calculateEnergyForDistance(actualDistance);
+        const socRequired = (energyRequired / vehicle.battery) * 100;
+        const batteryAfter = vehicle.soc - socRequired;
+        const travelTime = Math.round((actualDistance / 80) * 60);
+
+        document.getElementById('journeyDistance').textContent = actualDistance.toFixed(1) + ' km';
+        document.getElementById('journeyEnergy').textContent = energyRequired.toFixed(2) + ' kWh';
+        document.getElementById('journeyBatteryAfter').textContent = batteryAfter.toFixed(1) + '%';
+        document.getElementById('journeyTime').textContent = travelTime + ' min';
+
+        const messageDiv = document.getElementById('journeyMessage');
+        if (batteryAfter < 0) {
+          messageDiv.innerHTML = `<div class="message message-danger">
+            <strong>⚠️ INSUFFICIENT BATTERY!</strong><br>
+            Need ${energyRequired.toFixed(2)} kWh but only have ${((vehicle.soc/100)*vehicle.battery).toFixed(2)} kWh.<br>
+            <strong>Charge before traveling!</strong>
+          </div>`;
+          document.getElementById('startJourneyBtn').disabled = true;
+        } else if (batteryAfter < 20) {
+          messageDiv.innerHTML = `<div class="message message-warning">
+            <strong>⚠️ Low battery on arrival</strong><br>
+            You'll arrive with ${batteryAfter.toFixed(1)}%. Plan charging at destination.
+          </div>`;
+          document.getElementById('startJourneyBtn').disabled = false;
+        } else {
+          messageDiv.innerHTML = `<div class="message message-success">
+            <strong>✅ Sufficient battery</strong><br>
+            You'll arrive with ${batteryAfter.toFixed(1)}% remaining.
+          </div>`;
+          document.getElementById('startJourneyBtn').disabled = false;
+        }
+
+        document.getElementById('journeyInfo').style.display = 'block';
+
+        // Add destination marker
+        if (destinationMarker) map.removeLayer(destinationMarker);
+
+        const redIcon = L.icon({
+          iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34],
+          shadowSize: [41, 41]
+        });
+
+        destinationMarker = L.marker([selectedDestination.lat, selectedDestination.lng], {icon: redIcon})
+          .addTo(map)
+          .bindPopup(`<b>Destination</b><br>${selectedDestination.name}<br>${actualDistance.toFixed(1)} km`);
+
+        // Show route to destination
+        if (routingControl) map.removeControl(routingControl);
+
+        routingControl = L.Routing.control({
+          waypoints: [
+            L.latLng(vehicle.lat, vehicle.lng),
+            L.latLng(selectedDestination.lat, selectedDestination.lng)
+          ],
+          routeWhileDragging: false,
+          show: false,
+          createMarker: function() { return null; }
+        }).addTo(map);
+
+        const bounds = L.latLngBounds([
+          [vehicle.lat, vehicle.lng],
+          [selectedDestination.lat, selectedDestination.lng]
+        ]);
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
+
+      function startJourney() {
+        if (!selectedDestination) return;
+
+        const distance = calculateDistance(
+          vehicle.lat, vehicle.lng,
+          selectedDestination.lat, selectedDestination.lng
+        );
+        const energyRequired = calculateEnergyForDistance(distance);
+        const socRequired = (energyRequired / vehicle.battery) * 100;
+
+        if (vehicle.soc < socRequired) {
+          showMessage('⚠️ Insufficient battery!', 'danger');
+          return;
+        }
+
+        clearMessages();
+        showMessage(`🚗 Journey to ${selectedDestination.name} started!`, 'info');
+
+        let progress = 0;
+        const steps = 20;
+
+        const journeyInterval = setInterval(() => {
+          progress++;
+          
+          if (progress >= steps) {
+            clearInterval(journeyInterval);
+            completeJourney(distance, energyRequired);
+            return;
+          }
+
+          const ratio = 1 / steps;
+          vehicle.lat += (selectedDestination.lat - vehicle.lat) * ratio;
+          vehicle.lng += (selectedDestination.lng - vehicle.lng) * ratio;
+          vehicle.soc -= socRequired / steps;
+
+          updateUserMarker();
+          updateUI();
+        }, 150);
+      }
+
+      function completeJourney(distance, energyUsed) {
+        vehicle.lat = selectedDestination.lat;
+        vehicle.lng = selectedDestination.lng;
+
+        updateUserMarker();
+        updateUI();
+
+        showMessage(`✅ Arrived at ${selectedDestination.name}!<br>Energy used: ${energyUsed.toFixed(2)} kWh<br>Battery: ${vehicle.soc.toFixed(1)}%`, 'success');
+
+        if (vehicle.soc < 30) {
+          showMessage(`⚠️ Low battery (${vehicle.soc.toFixed(1)}%). Find a charging station!`, 'warning');
+        }
+
+        document.getElementById('destination').value = '';
+        document.getElementById('journeyInfo').style.display = 'none';
+        selectedDestination = null;
+
+        if (destinationMarker) {
+          map.removeLayer(destinationMarker);
+          destinationMarker = null;
+        }
+
+        if (routingControl) {
+          map.removeControl(routingControl);
+          routingControl = null;
+        }
+      }
+
+      // === CHARGING STATIONS ===
+      function findChargers() {
+        clearChargingMarkers();
+        clearMessages();
+
+        const safeRange = calculateSafeRange();
+        const reachableStations = [];
+        const unreachableStations = [];
+
+        const greenIcon = L.icon({
+          iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34],
+          shadowSize: [41, 41]
+        });
+
+        const orangeIcon = L.icon({
+          iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png',
+          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34],
+          shadowSize: [41, 41]
+        });
+
+        chargingStations.forEach(station => {
+          const distance = calculateDistance(vehicle.lat, vehicle.lng, station.lat, station.lng);
+          const stationData = {...station, distance: distance};
+
+          if (distance <= safeRange) {
+            reachableStations.push(stationData);
+            const marker = L.marker([station.lat, station.lng], {icon: greenIcon})
+              .addTo(map)
+              .bindPopup(`<b>${station.name}</b><br>✅ REACHABLE<br>${distance.toFixed(1)} km<br>${station.power}kW`);
+            chargingMarkers.push(marker);
+          } else {
+            unreachableStations.push(stationData);
+            const marker = L.marker([station.lat, station.lng], {icon: orangeIcon})
+              .addTo(map)
+              .bindPopup(`<b>${station.name}</b><br>⚠️ OUT OF RANGE<br>${distance.toFixed(1)} km`);
+            chargingMarkers.push(marker);
+          }
+        });
+
+        nearbyStationsForAR = [...reachableStations, ...unreachableStations];
+
+        displayChargingStations(reachableStations, unreachableStations);
+
+        if (reachableStations.length === 0) {
+          showMessage(`⚠️ No reachable stations! Safe range: ${safeRange.toFixed(0)} km`, 'danger');
+        } else {
+          showMessage(`✅ Found ${reachableStations.length} reachable station(s)`, 'success');
+        }
+
+        document.getElementById('chargingSection').style.display = 'block';
+      }
+
+      function displayChargingStations(reachable, unreachable) {
+        const listDiv = document.getElementById('stationsList');
+        listDiv.innerHTML = '';
+
+        reachable.sort((a, b) => a.distance - b.distance);
+
+        reachable.forEach(station => {
+          const energyNeeded = calculateEnergyForDistance(station.distance);
+          const socAfter = vehicle.soc - ((energyNeeded / vehicle.battery) * 100);
+
+          const div = document.createElement('div');
+          div.className = 'station-item';
+          div.onclick = () => selectStation(station);
+          div.innerHTML = `
+            <div class="station-name">${station.name}</div>
+            <div class="station-details">
+              📍 ${station.distance.toFixed(1)} km | ⏱️ ~${Math.round((station.distance/60)*60)} min<br>
+              ⚡ ${station.power}kW ${station.type} | 🔌 ${station.available} plugs<br>
+              💰 R${station.cost}/kWh | 🔋 ${socAfter.toFixed(1)}% on arrival
+            </div>
+            <span class="station-badge badge-reachable">✅ REACHABLE</span>
+            ${station.type.includes('Fast') ? '<span class="station-badge badge-fast">⚡ FAST</span>' : ''}
+          `;
+          listDiv.appendChild(div);
+        });
+
+        unreachable.sort((a, b) => a.distance - b.distance).forEach(station => {
+          const div = document.createElement('div');
+          div.className = 'station-item unreachable';
+          div.innerHTML = `
+            <div class="station-name">${station.name}</div>
+            <div class="station-details">
+              📍 ${station.distance.toFixed(1)} km<br>
+              ⚡ ${station.power}kW ${station.type}<br>
+              ⚠️ Need ${(station.distance - calculateSafeRange()).toFixed(1)} km more range
+            </div>
+            <span class="station-badge badge-unreachable">❌ OUT OF RANGE</span>
+          `;
+          listDiv.appendChild(div);
+        });
+      }
+
+      function selectStation(station) {
+        selectedStation = station;
+        document.getElementById('navigateBtn').disabled = false;
+        
+        document.querySelectorAll('.station-item').forEach(el => el.classList.remove('selected'));
+        event.currentTarget.classList.add('selected');
+
+        showMessage(`📍 Selected: ${station.name} (${station.distance.toFixed(1)} km)`, 'info');
+      }
+
+      function navigateToStation() {
+        if (!selectedStation) return;
+
+        clearMessages();
+        showMessage(`🗺️ Navigating to ${selectedStation.name}...`, 'info');
+
+        if (routingControl) map.removeControl(routingControl);
+
+        routingControl = L.Routing.control({
+          waypoints: [
+            L.latLng(vehicle.lat, vehicle.lng),
+            L.latLng(selectedStation.lat, selectedStation.lng)
+          ],
+          routeWhileDragging: false,
+          show: false,
+          createMarker: function() { return null; }
+        }).addTo(map);
+
+        routingControl.on('routesfound', function(e) {
+          const route = e.routes[0];
+          const distance = (route.summary.totalDistance / 1000);
+          
+          setTimeout(() => arriveAtStation(selectedStation, distance), 2000);
+        });
+      }
+
+      function arriveAtStation(station, distance) {
+        const energyUsed = calculateEnergyForDistance(distance);
+        const socUsed = (energyUsed / vehicle.battery) * 100;
+        
+        vehicle.soc -= socUsed;
+        vehicle.lat = station.lat;
+        vehicle.lng = station.lng;
+
+        updateUserMarker();
+        updateUI();
+
+        atStation = true;
+        document.getElementById('chargeBtn').disabled = false;
+
+        showMessage(`✅ Arrived at ${station.name}!<br>Energy used: ${energyUsed.toFixed(2)} kWh<br>Battery: ${vehicle.soc.toFixed(1)}%<br><br>You can now charge.`, 'success');
+      }
+
+      function chargeVehicle() {
+        if (!atStation || !selectedStation) {
+          showMessage('⚠️ Navigate to a station first to charge', 'warning');
+          return;
+        }
+
+        if (vehicle.soc >= 95) {
+          showMessage('✅ Battery already charged!', 'info');
+          return;
+        }
+
+        clearMessages();
+        const startSOC = vehicle.soc;
+        const targetSOC = 80;
+        const chargingPower = selectedStation.power;
+        const energyNeeded = ((targetSOC - startSOC) / 100) * vehicle.battery;
+        const timeMinutes = (energyNeeded / chargingPower) * 60;
+        const cost = energyNeeded * selectedStation.cost;
+
+        showMessage(`🔌 Charging at ${selectedStation.name}<br>
+          ${chargingPower}kW ${selectedStation.type}<br>
+          ${startSOC.toFixed(1)}% → ${targetSOC}%<br>
+          Time: ~${timeMinutes.toFixed(0)} min | Cost: R${cost.toFixed(2)}`, 'info');
+
+        const steps = 30;
+        const increment = (targetSOC - startSOC) / steps;
+        let step = 0;
+
+        const chargingInterval = setInterval(() => {
+          step++;
+          vehicle.soc += increment;
+
+          if (step >= steps || vehicle.soc >= targetSOC) {
+            clearInterval(chargingInterval);
+            vehicle.soc = targetSOC;
+            updateUI();
+            updateUserMarker();
+            showMessage(`✅ Charging complete!<br>
+              Battery: ${vehicle.soc.toFixed(1)}%<br>
+              Range: ${calculateRemainingRange().toFixed(0)} km<br>
+              Cost: R${cost.toFixed(2)}`, 'success');
+            return;
+          }
+
+          updateUI();
+          updateUserMarker();
+        }, 100);
+      }
+
+      function clearChargingMarkers() {
+        chargingMarkers.forEach(marker => map.removeLayer(marker));
+        chargingMarkers = [];
+        selectedStation = null;
+        atStation = false;
+        nearbyStationsForAR = [];
+        document.getElementById('navigateBtn').disabled = true;
+        document.getElementById('chargeBtn').disabled = true;
+      }
+
+      // === AR FUNCTIONALITY ===
+      function toggleARView() {
+        arActive = !arActive;
+        const arView = document.getElementById('arView');
+        const mapView = document.getElementById('map');
+        const arBtn = document.getElementById('arBtn');
+        const arOverlay = document.getElementById('arOverlay');
+        const arInfo = document.getElementById('arInfo');
+        const arControls = document.getElementById('arControls');
+
+        if (arActive) {
+          // Check if stations have been found
+          if (nearbyStationsForAR.length === 0) {
+            showMessage('⚠️ Find charging stations first before using AR!', 'warning');
+            arActive = false;
+            return;
+          }
+
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            showMessage('⚠️ Camera not supported', 'warning');
+            arActive = false;
+            return;
+          }
+
+          navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+          })
+            .then(() => {
+              mapView.style.display = 'none';
+              arView.classList.add('active');
+              arOverlay.classList.add('active');
+              arInfo.classList.add('active');
+              arControls.classList.add('active');
+              arBtn.textContent = '🗺️ Map View';
+
+              // Update debug info
+              document.getElementById('arDebug').textContent = 
+                `Your location: ${vehicle.lat.toFixed(4)}, ${vehicle.lng.toFixed(4)} | Stations: ${nearbyStationsForAR.length}`;
+
+              setTimeout(() => arOverlay.classList.remove('active'), 5000);
+              
+              setTimeout(() => addARMarkers(), 1000);
+            })
+            .catch((err) => {
+              console.error('Camera error:', err);
+              showMessage('⚠️ Camera access denied', 'warning');
+              arActive = false;
+            });
+        } else {
+          arView.classList.remove('active');
+          mapView.style.display = 'block';
+          arOverlay.classList.remove('active');
+          arInfo.classList.remove('active');
+          arControls.classList.remove('active');
+          arBtn.textContent = '📱 AR View';
+        }
+      }
+
+      function addARMarkers() {
+        const arStations = document.getElementById('arStations');
+        if (!arStations) return;
+
+        arStations.innerHTML = '';
+        const safeRange = calculateSafeRange();
+        let reachableCount = 0;
+
+        console.log('Adding AR markers for', nearbyStationsForAR.length, 'stations');
+        console.log('Vehicle position:', vehicle.lat, vehicle.lng);
+
+        nearbyStationsForAR.forEach((station, index) => {
+          const isReachable = station.distance <= safeRange;
+          if (isReachable) reachableCount++;
+
+          const color = isReachable ? '#28a745' : '#dc3545';
+          const textColor = isReachable ? '#FFEB3B' : '#FF5252';
+
+          console.log(`Station ${index}: ${station.name} at ${station.lat}, ${station.lng} - ${station.distance.toFixed(1)}km - ${isReachable ? 'REACHABLE' : 'OUT OF RANGE'}`);
+
+          const arMarker = document.createElement('a-entity');
+          arMarker.setAttribute('gps-entity-place', `latitude: ${station.lat}; longitude: ${station.lng}`);
+          
+          // Larger, more visible markers
+          arMarker.innerHTML = `
+            <a-box 
+              position="0 2 0" 
+              scale="5 6 5" 
+              color="${color}"
+              material="opacity: 0.9"
+              animation="property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear"
+              animation__pulse="property: scale; to: 5.5 6.5 5.5; dir: alternate; loop: true; dur: 1500">
+            </a-box>
+            <a-cylinder
+              position="0 6 0"
+              radius="2"
+              height="3"
+              color="${color}"
+              animation="property: position; to: 0 7 0; dir: alternate; loop: true; dur: 1000">
+            </a-cylinder>
+            <a-text
+              value="${station.name}"
+              align="center"
+              position="0 10 0"
+              scale="8 8 8"
+              color="#FFFFFF"
+              background="#000000"
+              baseline="center"
+              width="4">
+            </a-text>
+            <a-text
+              value="${station.distance.toFixed(1)}km | ${station.power}kW"
+              align="center"
+              position="0 8 0"
+              scale="6 6 6"
+              color="${textColor}"
+              background="#1a1a1a"
+              baseline="center"
+              width="4">
+            </a-text>
+            <a-text
+              value="${isReachable ? 'REACHABLE' : 'OUT OF RANGE'}"
+              align="center"
+              position="0 6 0"
+              scale="5 5 5"
+              color="${isReachable ? '#00FF00' : '#FF0000'}"
+              background="#000000"
+              baseline="center"
+              width="4">
+            </a-text>
+          `;
+          
+          arStations.appendChild(arMarker);
+        });
+
+        document.getElementById('arInfoText').textContent = 
+          reachableCount > 0 
+            ? `⚡ ${reachableCount} reachable | ${safeRange.toFixed(0)} km range`
+            : `⚠️ No stations in range (${safeRange.toFixed(0)} km)`;
+
+        console.log('AR markers added to scene');
+      }
+
+      function recenterAR() {
+        showMessage('🎯 AR recentered. Look around slowly.', 'info');
+        addARMarkers();
+      }
+
+      // === UTILITY ===
+      function togglePanel() {
+        panelVisible = !panelVisible;
+        const panel = document.getElementById('panel');
+        const icon = document.getElementById('toggleIcon');
+        
+        if (panelVisible) {
+          panel.classList.remove('hidden');
+          icon.textContent = '▼';
+        } else {
+          panel.classList.add('hidden');
+          icon.textContent = '▶';
+        }
+      }
+
+      function resetSimulation() {
+        if (!confirm('Reset to APK campus with 75% battery?')) return;
+
+        vehicle.soc = 75;
+        vehicle.lat = ujCampuses.apk.lat;
+        vehicle.lng = ujCampuses.apk.lng;
+        vehicle.campus = 'apk';
+
+        clearChargingMarkers();
+        clearMessages();
+        
+        if (destinationMarker) {
+          map.removeLayer(destinationMarker);
+          destinationMarker = null;
+        }
+        
+        if (routingControl) {
+          map.removeControl(routingControl);
+          routingControl = null;
+        }
+
+        selectedDestination = null;
+        selectedStation = null;
+        atStation = false;
+
+        document.getElementById('destination').value = '';
+        document.getElementById('journeyInfo').style.display = 'none';
+        document.getElementById('chargingSection').style.display = 'none';
+
+        document.querySelectorAll('.campus-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.campus-btn')[0].classList.add('active');
+
+        document.getElementById('currentCampus').textContent = 'APK';
+
+        updateUserMarker();
+        updateUI();
+        map.setView([vehicle.lat, vehicle.lng], 13);
+
+        showMessage('🔄 Reset to APK campus', 'info');
+      }
+
+      // === INITIALIZATION ===
+      window.onload = function() {
+        initMap();
+        updateUI();
+      };
+    </script>
+  </body>
+</html>
