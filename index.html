@@ -10,8 +10,6 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
 
     <!-- MediaPipe for Hand Tracking -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -55,15 +53,15 @@
 
         .hand-cursor {
             position: fixed;
-            width: 30px;
-            height: 30px;
-            background: rgba(255, 215, 0, 0.8);
-            border: 3px solid white;
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 215, 0, 0.9);
+            border: 4px solid white;
             border-radius: 50%;
             z-index: 5001;
             pointer-events: none;
             display: none;
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
             transition: all 0.1s ease;
         }
 
@@ -71,24 +69,47 @@
             display: block;
         }
 
-        .hand-cursor.clicking {
+        .hand-cursor.holding {
             background: rgba(40, 167, 69, 0.9);
-            transform: scale(1.5);
-            box-shadow: 0 0 30px rgba(40, 167, 69, 0.8);
+            box-shadow: 0 0 40px rgba(40, 167, 69, 1);
+            transform: scale(1.2);
+        }
+
+        .hold-progress-ring {
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 5px solid transparent;
+            border-top-color: #28a745;
+            animation: spin 2s linear;
+            display: none;
+        }
+
+        .hand-cursor.holding .hold-progress-ring {
+            display: block;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .gesture-indicator {
             position: fixed;
-            top: 20px;
+            top: 80px;
             right: 20px;
             z-index: 5002;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.9);
             color: white;
-            padding: 15px 25px;
-            border-radius: 15px;
+            padding: 15px 20px;
+            border-radius: 12px;
             font-size: 14px;
             display: none;
-            border: 2px solid rgba(255, 215, 0, 0.6);
+            border: 2px solid #FFD700;
+            min-width: 200px;
         }
 
         .gesture-indicator.active {
@@ -380,10 +401,10 @@
 
         .direction-arrow {
             position: absolute;
-            width: 60px;
-            height: 60px;
+            width: 70px;
+            height: 70px;
             background: rgba(40, 167, 69, 0.9);
-            border-radius: 8px;
+            border-radius: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -393,8 +414,9 @@
             font-size: 10px;
             text-align: center;
             padding: 5px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-            border: 2px solid white;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+            border: 3px solid white;
+            transition: all 0.2s ease;
         }
 
         .direction-arrow.unreachable {
@@ -402,13 +424,42 @@
         }
 
         .arrow-icon {
-            font-size: 24px;
+            font-size: 28px;
             margin-bottom: 3px;
         }
 
         .arrow-distance {
             font-size: 9px;
             opacity: 0.9;
+        }
+
+        .ar-destination-overlay {
+            position: fixed;
+            bottom: 180px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 3002;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 15px;
+            display: none;
+            border: 2px solid #667eea;
+            pointer-events: all;
+        }
+
+        .ar-destination-overlay.active {
+            display: block;
+        }
+
+        .ar-destination-overlay select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-top: 8px;
+            background: white;
+            border: 2px solid #667eea;
         }
 
         /* ==================== CONTROL PANEL ==================== */
@@ -698,103 +749,24 @@
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
         ::-webkit-scrollbar-thumb { background: #667eea; border-radius: 3px; }
 
-        /* ========== HAND TRACKING STYLES ========== */
-        .hand-cursor {
+        /* Debug button */
+        .debug-btn {
             position: fixed;
-            width: 40px;
-            height: 40px;
-            background: rgba(255, 215, 0, 0.9);
-            border: 4px solid white;
-            border-radius: 50%;
-            z-index: 5001;
-            pointer-events: none;
-            display: none;
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
-            transition: all 0.1s ease;
-        }
-
-        .hand-cursor.active {
-            display: block;
-        }
-
-        .hand-cursor.holding {
-            background: rgba(40, 167, 69, 0.9);
-            box-shadow: 0 0 30px rgba(40, 167, 69, 1);
-        }
-
-        .hold-progress-ring {
-            position: absolute;
-            top: -5px;
-            left: -5px;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            border: 5px solid transparent;
-            border-top-color: #28a745;
-            animation: spin 2s linear;
-            display: none;
-        }
-
-        .hand-cursor.holding .hold-progress-ring {
-            display: block;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .gesture-indicator {
-            position: fixed;
-            top: 80px;
+            top: 120px;
             right: 20px;
-            z-index: 5002;
-            background: rgba(0, 0, 0, 0.85);
+            z-index: 5003;
+            background: rgba(255, 0, 0, 0.8);
             color: white;
-            padding: 15px 20px;
-            border-radius: 12px;
-            font-size: 14px;
-            display: none;
-            border: 2px solid #FFD700;
-        }
-
-        .gesture-indicator.active {
-            display: block;
-        }
-
-        .gesture-name {
-            font-weight: bold;
-            font-size: 16px;
-            color: #FFD700;
-            margin-bottom: 5px;
-        }
-
-        .ar-destination-overlay {
-            position: fixed;
-            bottom: 180px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 3002;
-            background: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 15px 20px;
-            border-radius: 15px;
-            display: none;
-            border: 2px solid #667eea;
-        }
-
-        .ar-destination-overlay.active {
-            display: block;
-        }
-
-        .ar-destination-overlay select {
-            width: 100%;
             padding: 10px;
             border-radius: 8px;
-            font-size: 14px;
-            margin-top: 8px;
-            background: white;
-            border: 2px solid #667eea;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            display: none;
+        }
+
+        .debug-btn.active {
+            display: block;
         }
     </style>
 </head>
@@ -960,22 +932,6 @@
         </div>
     </div>
 
-    <!-- Hand Tracking Canvas -->
-    <canvas id="handTrackingCanvas"></canvas>
-    
-    <!-- AR Overlay -->
-    <div id="arOverlay">
-        <h3>📱 AR Navigation with Hand Tracking</h3>
-        <p><strong>Hand Gestures:</strong></p>
-        <p>✋ <strong>Open Palm:</strong> Navigate/Scroll</p>
-        <p>👆 <strong>Point:</strong> Select marker</p>
-        <p>⭕ <strong>Circle Motion:</strong> Click/Confirm</p>
-        <p>✌️ <strong>Peace Sign:</strong> Toggle menu</p>
-        <p style="font-size: 11px; margin-top: 15px;">
-            <span id="arDebug"></span>
-        </p>
-    </div>
-
     <!-- Hand Tracking Elements -->
     <div class="hand-cursor" id="handCursor">
         <div class="hold-progress-ring"></div>
@@ -997,6 +953,22 @@
             <option value="midrand">Midrand</option>
         </select>
     </div>
+
+    <!-- AR Overlay -->
+    <div id="arOverlay">
+        <h3>📱 AR Navigation with Hand Tracking</h3>
+        <p><strong>Hand Gestures:</strong></p>
+        <p>👆 <strong>Point & Hold (2s):</strong> Select charging station</p>
+        <p>✋ <strong>Open Palm:</strong> Exit AR mode</p>
+        <p style="font-size: 11px; margin-top: 15px; opacity: 0.7;">
+            Point at green markers for 2 seconds to select
+        </p>
+    </div>
+
+    <!-- Debug Button -->
+    <button class="debug-btn" id="debugBtn" onclick="debugMarkers()">
+        🔍 Debug
+    </button>
 
     <!-- 3D Charging Scene -->
     <div id="chargingScene">
@@ -1134,6 +1106,15 @@
         let chargingActive = false;
         let currentHeading = 0;
         let orientationSupported = ('DeviceOrientationEvent' in window);
+        
+        // Hand tracking variables
+        let hands = null;
+        let camera = null;
+        let handTrackingActive = false;
+        let isPointing = false;
+        let pointingStartTime = 0;
+        let pointingTarget = null;
+        let holdDuration = 2000; // 2 seconds to click
         
         // ==================== INITIALIZATION ====================
         function initMap() {
@@ -1512,6 +1493,7 @@
                 document.getElementById('arView').classList.add('active');
                 document.getElementById('arOverlay').classList.add('active');
                 document.getElementById('arBtn').textContent = '🗺️ Map View';
+                document.getElementById('debugBtn').classList.add('active');
 
                 setTimeout(() => {
                     document.getElementById('arOverlay').classList.remove('active');
@@ -1520,10 +1502,12 @@
                 initARTracking();
                 updateARIndicators();
                 
-                // Initialize hand tracking
-                initHandTracking(video);
+                // Initialize hand tracking after a delay to ensure markers are created
+                setTimeout(() => {
+                    initHandTracking(video);
+                }, 1500);
 
-                console.log('✅ AR View started with hand tracking');
+                console.log('✅ AR View started');
             })
             .catch((err) => {
                 console.error('Camera error:', err);
@@ -1537,6 +1521,7 @@
             
             // Stop hand tracking
             stopHandTracking();
+            
             if (arStream) {
                 arStream.getTracks().forEach(track => track.stop());
                 arStream = null;
@@ -1550,6 +1535,7 @@
             document.getElementById('arView').classList.remove('active');
             document.getElementById('map').style.display = 'block';
             document.getElementById('arBtn').textContent = '📱 AR View (Hand Tracking)';
+            document.getElementById('debugBtn').classList.remove('active');
 
             window.removeEventListener('deviceorientation', handleOrientation);
 
@@ -1611,7 +1597,7 @@
 
                 const arrow = document.createElement('div');
                 arrow.className = 'direction-arrow' + (isReachable ? '' : ' unreachable');
-                arrow.dataset.stationId = station.id; // For hand tracking selection
+                arrow.dataset.stationId = station.id; // CRITICAL: Add station ID for hand tracking
                 
                 const radius = 150;
                 const angleRad = (relativeAngle - 90) * Math.PI / 180;
@@ -1630,17 +1616,11 @@
 
                 indicatorsContainer.appendChild(arrow);
             });
+
+            console.log(`📍 Updated AR indicators: ${closestStations.length} markers created`);
         }
         
         // ==================== HAND TRACKING ====================
-        let hands = null;
-        let camera = null;
-        let handTrackingActive = false;
-        let isPointing = false;
-        let pointingStartTime = 0;
-        let pointingTarget = null;
-        let holdDuration = 2000; // 2 seconds to click
-
         function initHandTracking(videoElement) {
             console.log('👋 Initializing hand tracking...');
 
@@ -1731,6 +1711,9 @@
             
             cursor.style.left = screenX + 'px';
             cursor.style.top = screenY + 'px';
+            
+            // Show coordinates for debugging
+            cursor.innerHTML = `<div class="hold-progress-ring"></div>`;
         }
 
         function detectGesture(landmarks) {
@@ -1760,6 +1743,8 @@
 
         function handleGesture(gesture, indexTip) {
             const cursor = document.getElementById('handCursor');
+            const screenX = indexTip.x * window.innerWidth;
+            const screenY = indexTip.y * window.innerHeight;
 
             if (gesture === 'open_hand') {
                 updateGestureIndicator('✋ Open Hand', 'Exiting AR...');
@@ -1773,9 +1758,6 @@
                 }, 500);
 
             } else if (gesture === 'pointing') {
-                const screenX = indexTip.x * window.innerWidth;
-                const screenY = indexTip.y * window.innerHeight;
-
                 // Check if pointing at marker
                 const target = checkPointingAtMarker(screenX, screenY);
 
@@ -1786,6 +1768,7 @@
                         pointingStartTime = Date.now();
                         pointingTarget = target;
                         cursor.classList.add('holding');
+                        console.log('👆 Started pointing at marker:', target.dataset.stationId);
                     }
 
                     // Check if held long enough
@@ -1796,6 +1779,7 @@
 
                     if (holdTime >= holdDuration) {
                         // CLICK!
+                        console.log('✅ CLICK! Marker selected');
                         clickMarker(target);
                         isPointing = false;
                         pointingStartTime = 0;
@@ -1808,11 +1792,14 @@
                     }
                 } else {
                     // Not pointing at anything
+                    if (isPointing) {
+                        console.log('❌ Lost target');
+                    }
                     isPointing = false;
                     pointingStartTime = 0;
                     pointingTarget = null;
                     cursor.classList.remove('holding');
-                    updateGestureIndicator('👆 Pointing', 'Point at a marker');
+                    updateGestureIndicator('👆 Pointing', 'Point at a green marker');
                 }
 
             } else {
@@ -1833,20 +1820,36 @@
         function checkPointingAtMarker(x, y) {
             const markers = document.querySelectorAll('.direction-arrow');
             
+            console.log(`🔍 Checking ${markers.length} markers at cursor (${Math.round(x)}, ${Math.round(y)})`);
+            
+            // Larger hit area for easier selection
+            const hitRadius = 100; // pixels
+            
             for (let marker of markers) {
                 const rect = marker.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
                 
-                if (x >= rect.left && x <= rect.right &&
-                    y >= rect.top && y <= rect.bottom) {
-                    
+                // Calculate distance from cursor to marker center
+                const distance = Math.sqrt(
+                    Math.pow(x - centerX, 2) + 
+                    Math.pow(y - centerY, 2)
+                );
+                
+                console.log(`   Marker at (${Math.round(centerX)}, ${Math.round(centerY)}) - Distance: ${Math.round(distance)}px`);
+                
+                if (distance <= hitRadius) {
                     // Highlight marker
                     marker.style.outline = '4px solid #FFD700';
-                    marker.style.transform = marker.style.transform.replace(/scale\([^)]*\)/, '') + ' scale(1.3)';
+                    marker.style.transform = marker.style.transform.replace(/scale\([^)]*\)/, '') + ' scale(1.4)';
+                    marker.style.boxShadow = '0 0 30px rgba(255, 215, 0, 1)';
                     
+                    console.log(`   ✅ HIT! Station ID: ${marker.dataset.stationId}`);
                     return marker;
                 } else {
                     // Remove highlight
                     marker.style.outline = 'none';
+                    marker.style.boxShadow = '';
                 }
             }
             
@@ -1857,15 +1860,23 @@
             const stationId = parseInt(marker.dataset.stationId);
             const station = nearbyStationsForAR.find(s => s.id === stationId);
             
+            console.log('🎯 Attempting to select station:', stationId, station);
+            
             if (station) {
                 selectedStation = station;
                 showMessage(`✅ Selected: ${station.name} (${station.distance.toFixed(1)} km)`, 'success');
                 
                 // Visual feedback
                 marker.style.background = 'rgba(40, 167, 69, 1)';
+                marker.style.transform = marker.style.transform + ' scale(1.5)';
                 setTimeout(() => {
                     marker.style.background = '';
+                    marker.style.transform = marker.style.transform.replace(/scale\(1\.5\)/, '');
                 }, 1000);
+                
+                console.log('✅ Station selected successfully');
+            } else {
+                console.error('❌ Station not found in nearbyStationsForAR');
             }
         }
 
@@ -1889,13 +1900,40 @@
             }
         }
 
+        // ==================== DEBUG ====================
+        function debugMarkers() {
+            const markers = document.querySelectorAll('.direction-arrow');
+            console.log('=== DEBUG INFO ===');
+            console.log('AR Active:', arActive);
+            console.log('Hand Tracking Active:', handTrackingActive);
+            console.log('Nearby Stations:', nearbyStationsForAR.length);
+            console.log('Markers on Screen:', markers.length);
+            console.log('Is Pointing:', isPointing);
+            console.log('Selected Station:', selectedStation);
+            
+            markers.forEach((marker, i) => {
+                const rect = marker.getBoundingClientRect();
+                console.log(`Marker ${i}:`, {
+                    stationId: marker.dataset.stationId,
+                    position: `(${Math.round(rect.left)}, ${Math.round(rect.top)})`,
+                    visible: rect.width > 0 && rect.height > 0
+                });
+            });
+            
+            alert(`Markers: ${markers.length}\nStations: ${nearbyStationsForAR.length}\nHand Tracking: ${handTrackingActive ? 'ON' : 'OFF'}`);
+        }
+
         // ==================== WINDOW ONLOAD ====================
         window.onload = function() {
             initMap();
             updateUI();
             
             console.log('🎉 UJ EV Navigator with Hand Tracking ready!');
-            console.log('📱 Start AR View to use hand gestures');
+            console.log('📱 Steps:');
+            console.log('1. Click "Find Stations"');
+            console.log('2. Click "AR View (Hand Tracking)"');
+            console.log('3. Point at green markers for 2 seconds');
+            console.log('4. Open palm to exit AR');
         };
     </script>
 </body>
