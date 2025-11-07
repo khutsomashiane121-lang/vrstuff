@@ -327,11 +327,10 @@
 
         #stationIndicators {
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 500px;
-            height: 500px;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             z-index: 3001;
             pointer-events: none;
         }
@@ -354,6 +353,7 @@
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
             border: 3px solid white;
             transition: all 0.3s ease;
+            pointer-events: all;
         }
 
         .direction-arrow.unreachable {
@@ -678,8 +678,8 @@
             display: block;
         }
 
-        /* Mouse simulation mode */
-        .mouse-mode-indicator {
+        /* Orientation indicator */
+        .orientation-indicator {
             position: fixed;
             bottom: 20px;
             left: 50%;
@@ -694,7 +694,7 @@
             font-weight: bold;
         }
 
-        .mouse-mode-indicator.active {
+        .orientation-indicator.active {
             display: block;
         }
     </style>
@@ -844,7 +844,7 @@
                 </div>
             </div>
 
-            <!-- Station Indicators (Fixed positions for laptop testing) -->
+            <!-- Station Indicators (Dynamic positioning based on device orientation) -->
             <div id="stationIndicators"></div>
         </div>
     </div>
@@ -869,7 +869,7 @@
             Point at green markers for 2 seconds to select
         </p>
         <p style="font-size: 10px; margin-top: 10px; color: #FFD700;">
-            💻 On laptop: Markers stay fixed (phone has motion tracking)
+            📱 Move your phone to see stations in different directions
         </p>
     </div>
 
@@ -878,9 +878,9 @@
         🔍 Debug Info
     </button>
 
-    <!-- Mouse Mode Indicator -->
-    <div class="mouse-mode-indicator" id="mouseModeIndicator">
-        💻 Laptop Mode: Markers Fixed (Use mouse as backup)
+    <!-- Orientation Indicator -->
+    <div class="orientation-indicator" id="orientationIndicator">
+        🧭 Compass: 0°
     </div>
 
     <!-- 3D Charging Scene -->
@@ -1027,8 +1027,10 @@
         let pointingTarget = null;
         let holdDuration = 2000; // 2 seconds to click
         
-        // Mouse fallback for laptop testing
-        let mouseClickEnabled = false;
+        // Device orientation variables
+        let currentHeading = 0;
+        let orientationSupported = false;
+        let orientationPermissionGranted = false;
         
         // ==================== INITIALIZATION ====================
         function initMap() {
@@ -1072,6 +1074,19 @@
                       Math.sin(dLng/2) * Math.sin(dLng/2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             return R * c;
+        }
+
+        function calculateBearing(lat1, lng1, lat2, lng2) {
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const lat1Rad = lat1 * Math.PI / 180;
+            const lat2Rad = lat2 * Math.PI / 180;
+            
+            const y = Math.sin(dLng) * Math.cos(lat2Rad);
+            const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) -
+                      Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng);
+            
+            let bearing = Math.atan2(y, x) * 180 / Math.PI;
+            return (bearing + 360) % 360;
         }
 
         function calculateRemainingRange() {
@@ -1196,7 +1211,8 @@
 
             chargingStations.forEach(station => {
                 const distance = calculateDistance(vehicle.lat, vehicle.lng, station.lat, station.lng);
-                const stationData = {...station, distance: distance};
+                const bearing = calculateBearing(vehicle.lat, vehicle.lng, station.lat, station.lng);
+                const stationData = {...station, distance: distance, bearing: bearing};
 
                 if (distance <= safeRange) {
                     reachableStations.push(stationData);
@@ -1362,6 +1378,32 @@
         }
 
         // ==================== AR VIEW ====================
+        async function requestOrientationPermission() {
+            if (typeof DeviceOrientationEvent !== 'undefined' && 
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // iOS 13+ requires explicit permission
+                try {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') {
+                        orientationPermissionGranted = true;
+                        console.log('✅ Device orientation permission granted');
+                        return true;
+                    } else {
+                        console.warn('⚠️ Device orientation permission denied');
+                        showMessage('⚠️ Device orientation permission denied. AR markers will be fixed.', 'warning');
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('Error requesting orientation permission:', error);
+                    return false;
+                }
+            } else {
+                // Android or older iOS - no permission needed
+                orientationPermissionGranted = true;
+                return true;
+            }
+        }
+
         function toggleARView() {
             arActive = !arActive;
 
@@ -1378,12 +1420,15 @@
             }
         }
 
-        function startARView() {
+        async function startARView() {
             console.log('🚀 Starting AR View with Hand Tracking...');
+            
+            // Request orientation permission first (for iOS)
+            await requestOrientationPermission();
             
             navigator.mediaDevices.getUserMedia({
                 video: { 
-                    facingMode: 'user', // Use front camera for laptop
+                    facingMode: 'environment', // Use back camera on mobile
                     width: { ideal: 1280 },
                     height: { ideal: 720 }
                 }
@@ -1399,21 +1444,21 @@
                 document.getElementById('arOverlay').classList.add('active');
                 document.getElementById('arBtn').textContent = '🗺️ Map View';
                 document.getElementById('debugBtn').classList.add('active');
-                document.getElementById('mouseModeIndicator').classList.add('active');
+                document.getElementById('orientationIndicator').classList.add('active');
 
                 setTimeout(() => {
                     document.getElementById('arOverlay').classList.remove('active');
                 }, 6000);
 
-                // Create fixed markers for laptop (no device orientation)
-                createFixedARMarkers();
+                // Start device orientation tracking
+                startOrientationTracking();
                 
                 // Initialize hand tracking
                 setTimeout(() => {
                     initHandTracking(video);
                 }, 1500);
 
-                console.log('✅ AR View started in LAPTOP MODE (fixed markers)');
+                console.log('✅ AR View started with orientation tracking');
             })
             .catch((err) => {
                 console.error('Camera error:', err);
@@ -1422,7 +1467,127 @@
             });
         }
 
+        function startOrientationTracking() {
+            if (window.DeviceOrientationEvent) {
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                window.addEventListener('deviceorientation', handleOrientationFallback, true);
+                orientationSupported = true;
+                console.log('📱 Device orientation tracking enabled');
+            } else {
+                console.warn('⚠️ Device orientation not supported');
+                showMessage('⚠️ Device orientation not supported. Using fixed markers.', 'warning');
+                createFixedARMarkers();
+            }
+        }
+
+        function handleOrientation(event) {
+            if (event.absolute && event.alpha !== null) {
+                // Use absolute orientation if available (best for compass)
+                currentHeading = 360 - event.alpha; // Convert to compass heading
+                updateARMarkers();
+            }
+        }
+
+        function handleOrientationFallback(event) {
+            if (event.alpha !== null && !event.absolute) {
+                // Fallback to relative orientation
+                currentHeading = 360 - event.alpha;
+                updateARMarkers();
+            }
+        }
+
+        function stopOrientationTracking() {
+            window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
+            window.removeEventListener('deviceorientation', handleOrientationFallback, true);
+            console.log('🛑 Device orientation tracking stopped');
+        }
+
+        function updateARMarkers() {
+            const safeRange = calculateSafeRange();
+            const indicatorsContainer = document.getElementById('stationIndicators');
+            
+            // Update HUD
+            document.getElementById('arBattery').textContent = vehicle.soc.toFixed(1) + '%';
+            document.getElementById('arRange').textContent = safeRange.toFixed(0) + ' km';
+            document.getElementById('arStationCount').textContent = nearbyStationsForAR.length;
+            
+            // Update orientation indicator
+            document.getElementById('orientationIndicator').textContent = `🧭 Compass: ${Math.round(currentHeading)}°`;
+
+            // Clear existing markers
+            indicatorsContainer.innerHTML = '';
+
+            const closestStations = [...nearbyStationsForAR]
+                .sort((a, b) => a.distance - b.distance)
+                .slice(0, 5); // Show up to 5 closest stations
+
+            closestStations.forEach((station) => {
+                const isReachable = station.distance <= safeRange;
+                
+                // Calculate relative bearing (station bearing - current heading)
+                let relativeBearing = station.bearing - currentHeading;
+                
+                // Normalize to -180 to 180
+                while (relativeBearing > 180) relativeBearing -= 360;
+                while (relativeBearing < -180) relativeBearing += 360;
+                
+                // Only show markers within field of view (±90 degrees)
+                if (Math.abs(relativeBearing) > 90) {
+                    return; // Skip markers behind or too far to the side
+                }
+
+                const arrow = document.createElement('div');
+                arrow.className = 'direction-arrow' + (isReachable ? '' : ' unreachable');
+                arrow.dataset.stationId = station.id;
+                arrow.dataset.bearing = relativeBearing;
+                
+                // Convert bearing to screen position
+                // Center of screen is 0°, left is -90°, right is +90°
+                const screenWidth = window.innerWidth;
+                const screenHeight = window.innerHeight;
+                
+                // Horizontal position based on bearing (-90° to +90° maps to 0 to 100%)
+                const xPercent = ((relativeBearing + 90) / 180) * 100;
+                
+                // Vertical position based on distance (closer = higher on screen)
+                // Map 0-20km to 70%-30% of screen height
+                const maxDisplayDistance = 20;
+                const distanceFactor = Math.min(station.distance / maxDisplayDistance, 1);
+                const yPercent = 30 + (distanceFactor * 40); // 30% to 70% of screen
+                
+                arrow.style.left = `${xPercent}%`;
+                arrow.style.top = `${yPercent}%`;
+                arrow.style.transform = `translate(-50%, -50%)`;
+
+                // Add rotation arrow based on direction
+                let arrowSymbol = '⚡';
+                if (relativeBearing < -60) arrowSymbol = '◀';
+                else if (relativeBearing < -30) arrowSymbol = '◤';
+                else if (relativeBearing < -10) arrowSymbol = '▲';
+                else if (relativeBearing <= 10) arrowSymbol = '⚡';
+                else if (relativeBearing <= 30) arrowSymbol = '▲';
+                else if (relativeBearing <= 60) arrowSymbol = '◥';
+                else arrowSymbol = '▶';
+
+                arrow.innerHTML = `
+                    <div class="arrow-icon">${arrowSymbol}</div>
+                    <div style="font-size: 9px;">${station.name}</div>
+                    <div class="arrow-distance">${station.distance.toFixed(1)}km</div>
+                `;
+
+                // Enable click
+                arrow.style.cursor = 'pointer';
+                arrow.onclick = () => {
+                    console.log('🖱️ Clicked on marker');
+                    clickMarker(arrow);
+                };
+
+                indicatorsContainer.appendChild(arrow);
+            });
+        }
+
         function createFixedARMarkers() {
+            // Fallback for devices without orientation support
             const safeRange = calculateSafeRange();
             const indicatorsContainer = document.getElementById('stationIndicators');
             indicatorsContainer.innerHTML = '';
@@ -1435,11 +1600,11 @@
                 .sort((a, b) => a.distance - b.distance)
                 .slice(0, 3);
 
-            // Fixed positions for laptop (spread around center)
+            // Fixed positions for devices without orientation
             const positions = [
-                { x: -150, y: 0 },    // Left
-                { x: 0, y: -150 },    // Top
-                { x: 150, y: 0 }      // Right
+                { x: 25, y: 50 },   // Left
+                { x: 50, y: 30 },   // Center-top
+                { x: 75, y: 50 }    // Right
             ];
 
             closestStations.forEach((station, index) => {
@@ -1450,8 +1615,8 @@
                 arrow.className = 'direction-arrow' + (isReachable ? '' : ' unreachable');
                 arrow.dataset.stationId = station.id;
                 
-                arrow.style.left = `calc(50% + ${pos.x}px)`;
-                arrow.style.top = `calc(50% + ${pos.y}px)`;
+                arrow.style.left = `${pos.x}%`;
+                arrow.style.top = `${pos.y}%`;
                 arrow.style.transform = `translate(-50%, -50%)`;
 
                 arrow.innerHTML = `
@@ -1460,8 +1625,6 @@
                     <div class="arrow-distance">${station.distance.toFixed(1)}km</div>
                 `;
 
-                // Enable mouse click as backup
-                arrow.style.pointerEvents = 'all';
                 arrow.style.cursor = 'pointer';
                 arrow.onclick = () => {
                     console.log('🖱️ Mouse clicked on marker');
@@ -1471,11 +1634,14 @@
                 indicatorsContainer.appendChild(arrow);
             });
 
-            console.log(`📍 Created ${closestStations.length} FIXED markers for laptop mode`);
+            console.log(`📍 Created ${closestStations.length} FIXED markers (no orientation)`);
         }
 
         function stopARView() {
             console.log('🛑 Stopping AR View...');
+            
+            // Stop orientation tracking
+            stopOrientationTracking();
             
             // Stop hand tracking
             stopHandTracking();
@@ -1489,7 +1655,7 @@
             document.getElementById('map').style.display = 'block';
             document.getElementById('arBtn').textContent = '📱 AR View (Hand Tracking)';
             document.getElementById('debugBtn').classList.remove('active');
-            document.getElementById('mouseModeIndicator').classList.remove('active');
+            document.getElementById('orientationIndicator').classList.remove('active');
 
             console.log('✅ AR View stopped');
         }
@@ -1557,7 +1723,6 @@
                 document.getElementById('handCursor').classList.remove('active', 'holding');
                 updateGestureIndicator('No Hand', 'Show hand to camera');
                 
-                // Reset pointing state when hand is lost
                 if (isPointing) {
                     console.log('❌ Hand lost, resetting pointing state');
                     isPointing = false;
@@ -1570,13 +1735,10 @@
             const landmarks = results.multiHandLandmarks[0];
             const indexTip = landmarks[8];
 
-            // Update cursor position
             updateHandCursor(indexTip.x, indexTip.y);
 
-            // Detect gesture
             const gesture = detectGesture(landmarks);
 
-            // Handle gesture
             handleGesture(gesture, indexTip);
         }
 
@@ -1603,12 +1765,10 @@
             const ringExtended = (ringTip.y < landmarks[13].y);
             const pinkyExtended = (pinkyTip.y < landmarks[17].y);
 
-            // OPEN HAND = EXIT AR
             if (indexExtended && middleExtended && ringExtended && pinkyExtended) {
                 return 'open_hand';
             }
 
-            // POINTING = SELECT
             if (indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
                 return 'pointing';
             }
@@ -1627,7 +1787,6 @@
                 isPointing = false;
                 pointingStartTime = 0;
                 
-                // Exit AR after short delay
                 setTimeout(() => {
                     if (arActive) {
                         toggleARView();
@@ -1635,11 +1794,9 @@
                 }, 500);
 
             } else if (gesture === 'pointing') {
-                // Check if pointing at marker
                 const target = checkPointingAtMarker(screenX, screenY);
 
                 if (target) {
-                    // Start or continue holding
                     if (!isPointing || pointingTarget !== target) {
                         isPointing = true;
                         pointingStartTime = Date.now();
@@ -1648,36 +1805,30 @@
                         console.log('👆 Started pointing at marker:', target.dataset.stationId);
                     }
 
-                    // Check if held long enough
                     const holdTime = Date.now() - pointingStartTime;
                     const progress = Math.min(holdTime / holdDuration, 1) * 100;
 
                     updateGestureIndicator('👆 Holding...', `${Math.round(progress)}% - Keep steady!`);
 
                     if (holdTime >= holdDuration) {
-                        // CLICK!
                         console.log('✅ CLICK! Hold duration reached');
                         clickMarker(target);
                         
-                        // Reset state after successful click
                         isPointing = false;
                         pointingStartTime = 0;
                         pointingTarget = null;
                         cursor.classList.remove('holding');
                         
-                        // Vibrate
                         if ('vibrate' in navigator) {
                             navigator.vibrate(200);
                         }
                         
-                        // Show success message
                         updateGestureIndicator('✅ Selected!', 'Station locked in');
                         setTimeout(() => {
                             updateGestureIndicator('👆 Point', 'Point at marker to select');
                         }, 2000);
                     }
                 } else {
-                    // Not pointing at anything - RESET state
                     if (isPointing) {
                         console.log('❌ Lost target, resetting');
                     }
@@ -1689,7 +1840,6 @@
                 }
 
             } else {
-                // No gesture - RESET state
                 isPointing = false;
                 pointingStartTime = 0;
                 pointingTarget = null;
@@ -1706,29 +1856,25 @@
         function checkPointingAtMarker(x, y) {
             const markers = document.querySelectorAll('.direction-arrow');
             
-            // Larger hit area for easier selection
-            const hitRadius = 120; // Increased for laptop
+            const hitRadius = 100;
             
             for (let marker of markers) {
                 const rect = marker.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
                 
-                // Calculate distance from cursor to marker center
                 const distance = Math.sqrt(
                     Math.pow(x - centerX, 2) + 
                     Math.pow(y - centerY, 2)
                 );
                 
                 if (distance <= hitRadius) {
-                    // Highlight marker
                     marker.style.outline = '5px solid #FFD700';
                     marker.style.transform = 'translate(-50%, -50%) scale(1.3)';
                     marker.style.boxShadow = '0 0 40px rgba(255, 215, 0, 1)';
                     
                     return marker;
                 } else {
-                    // Remove highlight
                     marker.style.outline = 'none';
                     marker.style.transform = 'translate(-50%, -50%)';
                     marker.style.boxShadow = '';
@@ -1748,7 +1894,6 @@
                 selectedStation = station;
                 showMessage(`✅ Selected: ${station.name} (${station.distance.toFixed(1)} km)`, 'success');
                 
-                // Visual feedback - STRONGER
                 marker.style.background = 'rgba(255, 215, 0, 1)';
                 marker.style.transform = 'translate(-50%, -50%) scale(1.6)';
                 marker.style.border = '5px solid #FFD700';
@@ -1773,26 +1918,27 @@
             console.log('=== DEBUG INFO ===');
             console.log('AR Active:', arActive);
             console.log('Hand Tracking Active:', handTrackingActive);
+            console.log('Orientation Supported:', orientationSupported);
+            console.log('Orientation Permission:', orientationPermissionGranted);
+            console.log('Current Heading:', currentHeading, '°');
             console.log('Nearby Stations:', nearbyStationsForAR.length);
             console.log('Markers on Screen:', markers.length);
             console.log('Is Pointing:', isPointing);
-            console.log('Pointing Start Time:', pointingStartTime);
-            console.log('Time Held:', pointingStartTime ? Date.now() - pointingStartTime : 0, 'ms');
             console.log('Selected Station:', selectedStation);
-            console.log('Cursor Position:', cursor.style.left, cursor.style.top);
             
             markers.forEach((marker, i) => {
                 const rect = marker.getBoundingClientRect();
+                const bearing = marker.dataset.bearing;
                 console.log(`Marker ${i}:`, {
                     stationId: marker.dataset.stationId,
+                    bearing: bearing ? Math.round(bearing) + '°' : 'N/A',
                     centerX: Math.round(rect.left + rect.width / 2),
                     centerY: Math.round(rect.top + rect.height / 2),
                     visible: rect.width > 0 && rect.height > 0
                 });
             });
             
-            const timeHeld = pointingStartTime ? Math.round((Date.now() - pointingStartTime) / 1000) : 0;
-            alert(`Markers: ${markers.length}\nStations: ${nearbyStationsForAR.length}\nHand Tracking: ${handTrackingActive ? 'ON' : 'OFF'}\nPointing: ${isPointing ? 'YES' : 'NO'}\nTime Held: ${timeHeld}s / 2s`);
+            alert(`Markers: ${markers.length}\nStations: ${nearbyStationsForAR.length}\nOrientation: ${orientationSupported ? 'YES' : 'NO'}\nHeading: ${Math.round(currentHeading)}°\nHand Tracking: ${handTrackingActive ? 'ON' : 'OFF'}`);
         }
 
         // ==================== WINDOW ONLOAD ====================
@@ -1801,13 +1947,14 @@
             updateUI();
             
             console.log('🎉 UJ EV Navigator with Hand Tracking ready!');
-            console.log('💻 LAPTOP MODE: Markers stay fixed');
+            console.log('📱 AR markers will track device orientation on mobile');
             console.log('📱 Steps:');
             console.log('1. Click "Find Stations"');
             console.log('2. Click "AR View (Hand Tracking)"');
-            console.log('3. Point at green markers for 2 seconds');
-            console.log('4. Open palm to exit AR');
-            console.log('5. Mouse click works as backup!');
+            console.log('3. Allow camera and orientation permissions');
+            console.log('4. Move your phone to see different stations');
+            console.log('5. Point at markers for 2 seconds to select');
+            console.log('6. Open palm to exit AR');
         };
     </script>
 </body>
